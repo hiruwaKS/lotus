@@ -22,6 +22,7 @@
 #include "Alias/TPA/Transforms/RunPrepass.h"
 #include "Alias/UnderApproxAA/UnderApproxAA.h"
 #include "Alias/seadsa/SeaDsaAliasAnalysis.hh"
+#include "Alias/SVFAA/SVFWrapper.h"
 #include <llvm/Analysis/CFLAndersAliasAnalysis.h>
 #include <llvm/Analysis/CFLSteensAliasAnalysis.h>
 #include <llvm/Analysis/TargetLibraryInfo.h>
@@ -235,6 +236,63 @@ void AliasAnalysisWrapper::initialize() {
     }, "CFLSteens");
     break;
   
+  case AAConfig::Implementation::SVFAnder: {
+    _initialized = initAA([this]{ 
+      _svf_aa = std::make_unique<SVFWrapper>("ander");
+      _svf_aa->runOnModule(*_module);
+    }, "SVFAA");
+    break;
+  }
+  case AAConfig::Implementation::SVFNander: {
+      _initialized = initAA([this]{ 
+      _svf_aa = std::make_unique<SVFWrapper>("nander");
+      _svf_aa->runOnModule(*_module);
+    }, "SVFAA");
+    break;
+  }
+  case AAConfig::Implementation::SVFSander: {
+      _initialized = initAA([this]{ 
+      _svf_aa = std::make_unique<SVFWrapper>("sander");
+      _svf_aa->runOnModule(*_module);
+    }, "SVFAA");
+    break;
+  }
+  case AAConfig::Implementation::SVFSFrander: {
+      _initialized = initAA([this]{ 
+      _svf_aa = std::make_unique<SVFWrapper>("sfrander");
+      _svf_aa->runOnModule(*_module);
+    }, "SVFAA");
+    break;
+  }
+  case AAConfig::Implementation::SVFSteens: {
+      _initialized = initAA([this]{ 
+      _svf_aa = std::make_unique<SVFWrapper>("steens");
+      _svf_aa->runOnModule(*_module);
+    }, "SVFAA");
+    break;
+  }
+  case AAConfig::Implementation::SVFFSPTA: {
+      _initialized = initAA([this]{ 
+      _svf_aa = std::make_unique<SVFWrapper>("fspta");
+      _svf_aa->runOnModule(*_module);
+    }, "SVFAA");
+    break;
+  }
+  case AAConfig::Implementation::SVFVFSPTA: {
+      _initialized = initAA([this]{ 
+      _svf_aa = std::make_unique<SVFWrapper>("vfspta");
+      _svf_aa->runOnModule(*_module);
+    }, "SVFAA");
+    break;
+  }
+  case AAConfig::Implementation::SVFType: {
+      _initialized = initAA([this]{ 
+      _svf_aa = std::make_unique<SVFWrapper>("type");
+      _svf_aa->runOnModule(*_module);
+    }, "SVFAA");
+    break;
+  }
+  
   case AAConfig::Implementation::Combined: {
     // Truly "combined": initialize multiple backends and merge their answers.
     // Mark as initialized if at least one backend succeeds.
@@ -249,7 +307,7 @@ void AliasAnalysisWrapper::initialize() {
     _initialized = andersenInitialized || dyckInitialized;
     break;
   }
-  
+
   case AAConfig::Implementation::SeaDsa:
   case AAConfig::Implementation::AllocAA:
   case AAConfig::Implementation::BasicAA:
@@ -260,10 +318,12 @@ void AliasAnalysisWrapper::initialize() {
     // These are not yet fully integrated in the wrapper
     errs() << "AliasAnalysisWrapper: " << _config.getName() 
            << " is not yet fully supported\n";
+    exit(-1);
     break;
   
   default:
     errs() << "AliasAnalysisWrapper: Unknown implementation type\n";
+    exit(-1);
     break;
   }
 }

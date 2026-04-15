@@ -30,5 +30,6 @@ target_link_libraries(CanaryAliasAnalysisWrapper
         FSCSPointerAnalysis
         TPATransforms
         TPAUtil
+        SVFAA
         ${alias_wrapper_llvm_libs}
 )

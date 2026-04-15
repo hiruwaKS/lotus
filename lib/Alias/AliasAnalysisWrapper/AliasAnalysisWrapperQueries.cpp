@@ -16,6 +16,7 @@
 #include "Alias/DyckAA/DyckAliasAnalysis.h"
 #include "Alias/SparrowAA/AndersenAA.h"
 #include "Alias/TPA/PointerAnalysis/Analysis/SemiSparsePointerAnalysis.h"
+#include "Alias/SVFAA/SVFWrapper.h"
 #include <llvm/ADT/SmallVector.h>
 #include <llvm/Analysis/AliasAnalysis.h>
 #include <llvm/Analysis/MemoryLocation.h>
@@ -120,6 +121,7 @@ AliasResult AliasAnalysisWrapper::query(const MemoryLocation &loc1, const Memory
   }
   if (_andersen_aa) return _andersen_aa->alias(loc1, loc2);
   if (_llvm_aa) return _llvm_aa->alias(loc1, loc2);
+  if (_svf_aa) return _svf_aa->alias(loc1, loc2);
   return query(loc1.Ptr, loc2.Ptr);
 }
 

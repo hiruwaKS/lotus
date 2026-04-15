@@ -1,5 +1,5 @@
 add_executable(dynaa-check dynaa-check.cpp)
-target_link_libraries(dynaa-check CanaryDynamicAA 
+target_link_libraries(dynaa-check CanaryDynamicAA CanaryAliasAnalysisWrapper
 LLVMAnalysis 
 LLVMIRReader
 )

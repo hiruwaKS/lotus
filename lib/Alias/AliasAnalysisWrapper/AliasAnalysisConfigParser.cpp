@@ -212,6 +212,30 @@ AAConfig lotus::parseAAConfigFromString(const std::string &str, const AAConfig &
   if (lower == "underapprox") {
     return AAConfig::UnderApprox();
   }
+  if (lower == "svf" || lower == "svfaa" || lower == "svfander") {
+    return AAConfig::SVFAnder();
+  }
+  if (lower == "svfnander") {
+      return AAConfig::SVFNander();
+  }
+  if (lower == "svfsander") {
+      return AAConfig::SVFSander();
+  }
+  if (lower == "svfsfrander") {
+      return AAConfig::SVFSFrander();
+  }
+  if (lower == "svfsteens") {
+      return AAConfig::SVFSteens();
+  }
+  if (lower == "svffspta") {
+      return AAConfig::SVFFSPTA();
+  }
+  if (lower == "svfvfspta") {
+      return AAConfig::SVFVFSPTA();
+  }
+  if (lower == "svftype") {
+      return AAConfig::SVFType();
+  }
   
   // Unknown string, return fallback
   return fallback;

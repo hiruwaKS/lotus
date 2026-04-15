@@ -11,6 +11,7 @@ add_subdirectory(SRAA)
 add_subdirectory(UnderApproxAA)
 add_subdirectory(LotusAA)
 add_subdirectory(AserPTA)
+add_subdirectory(SVFAA)
 # add_subdirectory(TypeQualifier) # not used for now
 add_subdirectory(AliasAnalysisWrapper)
 add_subdirectory(Metrics)

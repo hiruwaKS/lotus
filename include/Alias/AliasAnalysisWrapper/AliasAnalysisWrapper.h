@@ -11,6 +11,7 @@
 class AndersenAAResult;
 class DyckAliasAnalysis;
 class AllocAA;
+class SVFWrapper;
 
 namespace llvm {
 class CFLAndersAAWrapperPass;
@@ -77,6 +78,16 @@ struct AAConfig {
 
     // Combined: Multiple backends merged together
     Combined,
+
+    // SVFAA: AA using SVF
+    SVFAnder,           // -ander (Diff wave propagation)
+    SVFNander,          // -nander (Standard inclusion-based)
+    SVFSander,          // -sander (Selective cycle detection)
+    SVFSFrander,        // -sfrander (Stride-based field representation)
+    SVFSteens,          // -steens (Steensgaard's pointer analysis)
+    SVFFSPTA,           // -fspta (Sparse flow sensitive)
+    SVFVFSPTA,          // -vfspta (Versioned sparse flow-sensitive)
+    SVFType,            // -type (Type-based fast analysis)
 
     // LLVM built-in analyses
     BasicAA,
@@ -260,6 +271,39 @@ struct AAConfig {
             Solver::Default};
   }
 
+  static AAConfig SVFAnder() {
+    return {Implementation::SVFAnder, ContextSensitivity::None, 0, true,
+            Solver::Default};
+  }
+  static AAConfig SVFNander() {
+    return {Implementation::SVFNander, ContextSensitivity::None, 0, true,
+            Solver::Default};
+  }
+  static AAConfig SVFSander() {
+    return {Implementation::SVFSander, ContextSensitivity::None, 0, true,
+            Solver::Default};
+  }
+  static AAConfig SVFSFrander() {
+    return {Implementation::SVFSFrander, ContextSensitivity::None, 0, true,
+            Solver::Default};
+  }
+  static AAConfig SVFSteens() {
+    return {Implementation::SVFSteens, ContextSensitivity::None, 0, true,
+            Solver::Default};
+  }
+  static AAConfig SVFFSPTA() {
+    return {Implementation::SVFFSPTA, ContextSensitivity::None, 0, true,
+            Solver::Default};
+  }
+  static AAConfig SVFVFSPTA() {
+    return {Implementation::SVFVFSPTA, ContextSensitivity::None, 0, true,
+            Solver::Default};
+  }
+  static AAConfig SVFType() {
+    return {Implementation::SVFType, ContextSensitivity::None, 0, true,
+            Solver::Default};
+  }
+
   // LLVM built-ins
   static AAConfig BasicAA() {
     return {Implementation::BasicAA, ContextSensitivity::None, 0, true,
@@ -385,6 +429,7 @@ private:
   std::unique_ptr<lotus::analysis::DemandDrivenAA> _dda_aa;
   std::unique_ptr<tpa::SemiSparsePointerAnalysis> _tpa_aa;
   std::unique_ptr<tpa::SemiSparseProgram> _tpa_program;
+  std::unique_ptr<SVFWrapper> _svf_aa;
 
   llvm::AAResults *_llvm_aa;
   seadsa::SeaDsaAAResult *_seadsa_aa;
@@ -429,6 +474,8 @@ public:
  * - "allocaa", "alloc" -> AllocAA
  * - "combined" -> Combined
  * - "underapprox" -> UnderApprox
+ * - "svf", "svfaa", "svfander" -> SVFAnder
+ * - "svfsteens" -> SVFSteens
  *
  * @param str String representation of the alias analysis
  * @param fallback Config to return if string is unknown - MUST be explicitly
