@@ -142,7 +142,7 @@ public:
   /// @brief Find call targets (llvm::Function) of a certain call/invoke inst
   ///
   /// It is costly, used only in evaluation
-  const std::vector<llvm::Function *> getCallTargets(llvm::CallBase* CB) const;
+  void getCallTargets(llvm::CallBase* call, std::vector<const llvm::Function *> &targets) const;
 };
 
 /// @brief A node in the call graph representing a function.

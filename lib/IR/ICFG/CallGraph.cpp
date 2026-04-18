@@ -145,13 +145,11 @@ void LTCallGraph::addResolvedCallEdge(const Instruction *CS,
   callerNode->addCalledFunction(CS, calleeNode);
 }
 
-const std::vector<llvm::Function *> LTCallGraph::getCallTargets(llvm::CallBase* CB) const {
-  std::vector<llvm::Function *> targets;
-  auto I = FunctionMap.find(CB->getFunction());
-  if (I == FunctionMap.end()) return targets;
-  for (auto &record : *I->second)
-    if (record.first == CB) targets.push_back(record.second->F);
-  return targets;
+void LTCallGraph::getCallTargets(llvm::CallBase* call, std::vector<const llvm::Function *> &targets) const {
+  auto I = FunctionMap.find(call->getFunction());
+  if (I != FunctionMap.end())
+    for (auto &record : *I->second)
+      if (record.first == call) targets.push_back(record.second->F);
 }
 
 /// removeCallEdgeFor - This method removes the edge in the node for the

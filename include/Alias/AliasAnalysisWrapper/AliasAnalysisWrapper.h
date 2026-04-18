@@ -1,6 +1,8 @@
 /// Unified wrapper for alias analysis - supports multiple AA backends
 #pragma once
 
+#include "Alias/AliasAnalysisWrapper/AliasRecord.h"
+
 #include <memory>
 #include <string>
 
@@ -385,7 +387,10 @@ public:
                               std::vector<const llvm::Function *> &targets);
   bool getAliasSet(const llvm::Value *v,
                    std::vector<const llvm::Value *> &aliasSet);
-
+  /// Get alias pairs of the module, used in evaluation,
+  ///
+  /// since alias set query is only supported by few analyses, this function is a NOT implemented.
+  std::vector<AliasRecord> getAliasPairs() const;
   /**
    * @brief Get the configuration used by this wrapper
    *
