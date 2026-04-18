@@ -23,10 +23,10 @@ cl::opt<std::string>
     AA(cl::Positional, cl::desc("<alias-analysis>"),"basic-aa");
 
 bool checkAAResult(const std::string& name,std::unique_ptr<lotus::AliasAnalysisWrapper> aaResult, const DenseSet<AliasPair>& aliasSet,
-                   const IDAssigner& idMap,int& must_cnt, int& may_cnt) {
+                   int& must_cnt, int& may_cnt) {
     for (auto const& pair : aliasSet) {
-        const auto *valA = idMap.getValue(pair.getFirst());
-        const auto *valB = idMap.getValue(pair.getSecond());
+        const auto *valA = pair.getFirst();
+        const auto *valB = pair.getSecond();
         if (valA == nullptr || valB == nullptr)
             continue;
         // Create MemoryLocation objects from the values - use MemoryLocation's static method
@@ -57,7 +57,7 @@ int main(int argc, char **argv) {
   }
 
   // Perform dynamic alias analysis and get all DidAlias pairs
-  DynamicAliasAnalysis dynAA(LogFilename.data());
+  DynamicAliasAnalysis dynAA(*module, LogFilename.data());
   dynAA.runAnalysis();
 
   // Set up aa pipeline
@@ -68,17 +68,14 @@ int main(int argc, char **argv) {
   TargetLibraryAnalysis TLI;
   int must_cnt=0, may_cnt=0;
   funManager.registerPass([&] { return TLI; });
-    IDAssigner idMap(*module);
-    for (auto& f : *module) {
-        if (const auto *id = idMap.getID(f)) {
-            if (const auto *aliasSet = dynAA.getAliasPairs(*id)) {
-                auto AAWrapper=lotus::AliasAnalysisFactory::create(*module,
-                    lotus::parseAAConfigFromString(AA,lotus::AAConfig::BasicAA()));
-                if(!checkAAResult(AA, std::move(AAWrapper), *aliasSet, idMap,must_cnt,may_cnt)) {
-                    outs() << "[dynaa-check] Info: "<< 
-                    right_justify(AA, 15) << ", not sound" << "\n";
-                    return 0;
-                }
+    for (const auto& f : *module) {
+        if (const auto *aliasSet = dynAA.getAliasPairs(&f)) {
+            auto AAWrapper=lotus::AliasAnalysisFactory::create(*module,
+                lotus::parseAAConfigFromString(AA,lotus::AAConfig::BasicAA()));
+            if(!checkAAResult(AA, std::move(AAWrapper), *aliasSet,must_cnt,may_cnt)) {
+                outs() << "[dynaa-check] Info: "<< 
+                right_justify(AA, 15) << ", not sound" << "\n";
+                return 0;
             }
         }
     }

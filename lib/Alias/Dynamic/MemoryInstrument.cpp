@@ -174,16 +174,15 @@ void Instrumenter::instrumentCallInst(CallInst *CI) {
 
   if (callee && specMgr.isAllocator(callee))
     instrumentMalloc(CI);
-  else {
-    // CallHook must be inserted before the call actually happens
-    const auto id = getID(*CI);
-    auto *idArg = ConstantInt::get(getIntType(), id);
-    CallInst::Create(hooks.getCallHook(), {idArg}, "", CI);
+  
+  // CallHook must be inserted before the call actually happens
+  const auto id = getID(*CI);
+  auto *idArg = ConstantInt::get(getIntType(), id);
+  CallInst::Create(hooks.getCallHook(), {idArg}, "", CI);
 
-    // If the call returns a pointer, record it
-    if (CI->getType()->isPointerTy())
-      instrumentPointer(CI, &*nextInsertionPos(*CI));
-  }
+  // If the call returns a pointer, record it
+  if (CI->getType()->isPointerTy())
+    instrumentPointer(CI, &*nextInsertionPos(*CI));
 }
 
 /// Instruments invoke instructions (exception-handling calls): similar to call
@@ -194,20 +193,19 @@ void Instrumenter::instrumentInvokeInst(InvokeInst *II) {
 
   if (callee && specMgr.isAllocator(callee))
     instrumentMalloc(II);
-  else {
-    // CallHook must be inserted before the call actually happens
-    const auto id = getID(*II);
-    auto *idArg = ConstantInt::get(getIntType(), id);
-    CallInst::Create(hooks.getCallHook(), {idArg}, "", II);
+  
+  // CallHook must be inserted before the call actually happens
+  const auto id = getID(*II);
+  auto *idArg = ConstantInt::get(getIntType(), id);
+  CallInst::Create(hooks.getCallHook(), {idArg}, "", II);
 
-    // If the call returns a pointer, record it
-    if (II->getType()->isPointerTy()) {
-      // For invoke instructions, we need to be careful about insertion point
-      // since they have multiple successors
-      auto *normalDest = II->getNormalDest();
-      auto *firstInst = &*normalDest->getFirstInsertionPt();
-      instrumentPointer(II, firstInst);
-    }
+  // If the call returns a pointer, record it
+  if (II->getType()->isPointerTy()) {
+    // For invoke instructions, we need to be careful about insertion point
+    // since they have multiple successors
+    auto *normalDest = II->getNormalDest();
+    auto *firstInst = &*normalDest->getFirstInsertionPt();
+    instrumentPointer(II, firstInst);
   }
 }
 

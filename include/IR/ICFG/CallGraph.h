@@ -127,6 +127,22 @@ public:
   void addResolvedCallEdge(const llvm::Instruction *CS,
                            const llvm::Function *Caller,
                            const llvm::Function *Callee);
+
+  /// @brief A static method to list all the indirect callsites in a module
+  static std::vector<llvm::CallBase *> getIndirectCallSites(llvm::Module &M) {
+    std::vector<llvm::CallBase *> indirectCalls;
+    for (auto &F : M)
+      for (auto &BB : F)
+        for (auto &I : BB)
+          if (auto *CB = llvm::dyn_cast<llvm::CallBase>(&I))
+            if (!CB->getCalledFunction()) indirectCalls.push_back(CB);
+    return indirectCalls;
+  }
+
+  /// @brief Find call targets (llvm::Function) of a certain call/invoke inst
+  ///
+  /// It is costly, used only in evaluation
+  const std::vector<llvm::Function *> getCallTargets(llvm::CallBase* CB) const;
 };
 
 /// @brief A node in the call graph representing a function.
