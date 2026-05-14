@@ -281,6 +281,22 @@ void AliasAnalysisWrapper::getIndirectCallTargets(CallBase *call,
     std::vector<const llvm::Function *> tpaCallees = _tpa_aa->getCallees(call, nullptr);
     targets.assign(tpaCallees.begin(), tpaCallees.end());
   }
+  if (_dyck_aa && _initialized) {
+    if (const auto *dyckSet = _dyck_aa->getAliasSet(const_cast<Value *>(calledVal))) {
+      for (const Value *elem : *dyckSet) {
+        if (elem && elem->getType()->isFunctionTy()) {
+          targets.push_back(cast<Function>(elem));
+        }
+      }
+    }
+    return;
+  }
+  if (_alloc_aa) {
+    return;
+  }
+  if (_underapprox_aa) {
+    return;
+  }
 }
 
 /**
@@ -303,7 +319,11 @@ bool AliasAnalysisWrapper::getAliasSet(const Value *v, std::vector<const Value *
   aliasSet.clear();
   if (_dyck_aa && _initialized) {
     if (const auto *dyckSet = _dyck_aa->getAliasSet(const_cast<Value *>(v))) {
-      aliasSet.assign(dyckSet->begin(), dyckSet->end());
+      for (const Value *elem : *dyckSet) {
+        if (elem && elem->getType()->isPointerTy()) { // filter out functions since they should be pointed to, not aliasing, filter out "null" as well
+          aliasSet.push_back(elem);
+        }
+      }
       return true;
     }
   }

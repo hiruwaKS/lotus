@@ -1,8 +1,8 @@
 #pragma once
 
-#include <cstdint>
+#include <llvm/IR/Value.h>
 
 namespace dynamic {
 
-using DynamicPointer = std::uint32_t;
+using DynamicPointer = const llvm::Value *;
 } // namespace dynamic

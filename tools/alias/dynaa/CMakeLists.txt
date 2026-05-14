@@ -1,11 +1,9 @@
 add_executable(dynaa-check dynaa-check.cpp)
-target_link_libraries(dynaa-check CanaryDynamicAA 
+target_link_libraries(dynaa-check CanaryDynamicAA CanaryAliasAnalysisWrapper
 LLVMAnalysis 
 LLVMIRReader
 )
 
-add_executable(dynaa dynaa.cpp)
-target_link_libraries(dynaa CanaryDynamicAA LLVMSupport)
 
 add_executable(dynaa-log-dump dynaa-log-dump.cpp)
 target_link_libraries(dynaa-log-dump CanaryDynamicAA)

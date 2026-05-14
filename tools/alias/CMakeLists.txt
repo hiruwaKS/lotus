@@ -80,6 +80,14 @@ target_link_libraries(tpa PRIVATE
   ${LLVM_LINK_COMPONENTS}
 )
 
+# CclyzerAA Pointer Analysis Tool
+add_executable(cclyzer-aa cclyzer-aa.cpp)
+target_link_libraries(cclyzer-aa PRIVATE
+  LotusCclyzerAA
+  CanaryAliasCLIUtils
+  ${LLVM_LINK_COMPONENTS}
+)
+
 # Call Graph Construction Tool
 add_executable(call-graph call-graph.cpp)
 target_link_libraries(call-graph PRIVATE

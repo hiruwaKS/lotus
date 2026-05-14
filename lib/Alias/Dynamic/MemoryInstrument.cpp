@@ -101,6 +101,8 @@ void Instrumenter::instrumentGlobals(Module &module) {
 
   // Global values
   for (auto &global : module.globals()) {
+    if (global.getName().startswith("llvm."))
+      continue;
     // Prevent global variables from sharing the same address, because it
     // breaks the assumption that global variables do not alias.
     if (global.hasAtLeastLocalUnnamedAddr())
@@ -174,16 +176,15 @@ void Instrumenter::instrumentCallInst(CallInst *CI) {
 
   if (callee && specMgr.isAllocator(callee))
     instrumentMalloc(CI);
-  else {
-    // CallHook must be inserted before the call actually happens
-    const auto id = getID(*CI);
-    auto *idArg = ConstantInt::get(getIntType(), id);
-    CallInst::Create(hooks.getCallHook(), {idArg}, "", CI);
+  
+  // CallHook must be inserted before the call actually happens
+  const auto id = getID(*CI);
+  auto *idArg = ConstantInt::get(getIntType(), id);
+  CallInst::Create(hooks.getCallHook(), {idArg}, "", CI);
 
-    // If the call returns a pointer, record it
-    if (CI->getType()->isPointerTy())
-      instrumentPointer(CI, &*nextInsertionPos(*CI));
-  }
+  // If the call returns a pointer, record it
+  if (CI->getType()->isPointerTy())
+    instrumentPointer(CI, &*nextInsertionPos(*CI));
 }
 
 /// Instruments invoke instructions (exception-handling calls): similar to call
@@ -194,20 +195,19 @@ void Instrumenter::instrumentInvokeInst(InvokeInst *II) {
 
   if (callee && specMgr.isAllocator(callee))
     instrumentMalloc(II);
-  else {
-    // CallHook must be inserted before the call actually happens
-    const auto id = getID(*II);
-    auto *idArg = ConstantInt::get(getIntType(), id);
-    CallInst::Create(hooks.getCallHook(), {idArg}, "", II);
+  
+  // CallHook must be inserted before the call actually happens
+  const auto id = getID(*II);
+  auto *idArg = ConstantInt::get(getIntType(), id);
+  CallInst::Create(hooks.getCallHook(), {idArg}, "", II);
 
-    // If the call returns a pointer, record it
-    if (II->getType()->isPointerTy()) {
-      // For invoke instructions, we need to be careful about insertion point
-      // since they have multiple successors
-      auto *normalDest = II->getNormalDest();
-      auto *firstInst = &*normalDest->getFirstInsertionPt();
-      instrumentPointer(II, firstInst);
-    }
+  // If the call returns a pointer, record it
+  if (II->getType()->isPointerTy()) {
+    // For invoke instructions, we need to be careful about insertion point
+    // since they have multiple successors
+    auto *normalDest = II->getNormalDest();
+    auto *firstInst = &*normalDest->getFirstInsertionPt();
+    instrumentPointer(II, firstInst);
   }
 }
 
@@ -251,7 +251,7 @@ void Instrumenter::instrumentMain(Function &mainFunc) {
   assert(mainFunc.getName() == "main");
 
   auto pos = mainFunc.begin()->getFirstInsertionPt();
-  CallInst::Create(hooks.getInitHook(), "", &*pos);
+  // CallInst::Create(hooks.getInitHook(), "", &*pos);
   CallInst::Create(hooks.getGlobalHook(), "", &*pos);
 
   if (mainFunc.arg_size() > 0) {

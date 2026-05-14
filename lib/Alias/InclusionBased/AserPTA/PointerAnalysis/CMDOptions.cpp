@@ -24,3 +24,8 @@ cl::opt<bool> ConfigUseOnTheFlyCallGraph(
     "on-the-fly-callgraph",
     cl::desc("Use on-the-fly call graph construction during pointer analysis"),
     cl::init(true));
+cl::opt<std::string> ConfigFinalCallGraphOutput(
+    "finalcallgraphoutput",
+    cl::desc("Output path for final call graph DOT file (default: CallGraph_Final_<timestamp>.dot)"),
+    cl::value_desc("filename"),
+    cl::init(""));

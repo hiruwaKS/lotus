@@ -17,27 +17,30 @@ namespace {
 class AnalysisImpl : public LogProcessor<AnalysisImpl> {
 private:
   using AliasPairSet = DenseSet<AliasPair>;
-  using AnalysisMap = DenseMap<DynamicPointer, AliasPairSet>;
+  using AnalysisMap = DenseMap<const llvm::Function *, AliasPairSet>;
   AnalysisMap &aliasPairMap; ///< Maps functions to their discovered alias pairs
 
-  using GlobalMap = DenseMap<DynamicPointer, const void *>;
+  using GlobalMap = DenseMap<const llvm::GlobalValue *, const void *>;
   GlobalMap globalMap; ///< Maps global pointer IDs to their addresses
 
   using PtsSet = SmallPtrSet<const void *, 4>;
-  using LocalMap = DenseMap<DynamicPointer, PtsSet>;
+  using LocalMap = DenseMap<const llvm::Value *, PtsSet>;
   /// Represents a function call frame with its local pointer mappings
   struct Frame {
-    DynamicPointer func; ///< Function identifier
+    const llvm::Function * func; ///< Function identifier
     LocalMap localMap;   ///< Maps local pointer IDs to their point-to sets
   };
   std::vector<Frame> stackFrames; ///< Call stack for tracking nested functions
+  const llvm::Instruction *currentCS; ///< The current callsite for building call graph
+  IDAssigner &idAssigner;
+  LTCallGraph &callGraph; ///< passed by the wrapper
 
   static bool intersects(const PtsSet &, const PtsSet &);
   void findAliasPairs();
 
 public:
-  AnalysisImpl(const char *fileName, AnalysisMap &m)
-      : LogProcessor<AnalysisImpl>(fileName), aliasPairMap(m) {}
+  AnalysisImpl(const char *fileName, AnalysisMap &m, IDAssigner &ida, LTCallGraph &cg)
+      : LogProcessor<AnalysisImpl>(fileName), aliasPairMap(m), idAssigner(ida), callGraph(cg),currentCS(nullptr){}
 
   void visitAllocRecord(const AllocRecord &allocRecord);
   void visitPointerRecord(const PointerRecord &);
@@ -82,26 +85,44 @@ void AnalysisImpl::findAliasPairs() {
 /// Records a memory allocation, tracking the address for the pointer ID
 void AnalysisImpl::visitAllocRecord(const AllocRecord &allocRecord) {
   if (allocRecord.type == AllocType::Global) {
-    globalMap[allocRecord.id] = allocRecord.address;
+    if (!isa<llvm::GlobalValue>(idAssigner.getValue(allocRecord.id))) { exit(-1); }
+    globalMap[cast<llvm::GlobalValue>(idAssigner.getValue(allocRecord.id))] = allocRecord.address;
   } else {
-    stackFrames.back().localMap[allocRecord.id].insert(allocRecord.address);
+    stackFrames.back().localMap[
+      cast<llvm::Instruction>(idAssigner.getValue(allocRecord.id))].insert(allocRecord.address);
   }
 }
 
 /// Records a pointer assignment, adding the target address to the pointer's
 /// point-to set
 void AnalysisImpl::visitPointerRecord(const PointerRecord &ptrRecord) {
-  stackFrames.back().localMap[ptrRecord.id].insert(ptrRecord.address);
+  const auto *ptr = idAssigner.getValue(ptrRecord.id);
+  if (isa<Instruction>(ptr)) {
+    stackFrames.back().localMap[cast<Instruction>(ptr)].insert(ptrRecord.address);
+  } else if (isa<Argument>(ptr)) {
+    stackFrames.back().localMap[cast<Argument>(ptr)].insert(ptrRecord.address);
+  }
 }
 
 /// Pushes a new function frame onto the call stack
 void AnalysisImpl::visitEnterRecord(const EnterRecord &enterRecord) {
-  stackFrames.push_back(Frame{enterRecord.id, LocalMap()});
+  stackFrames.push_back(Frame{cast<llvm::Function>(idAssigner.getValue(enterRecord.id)), LocalMap()});
+  if (currentCS){
+    // outs()<<"[debug] callee hex:" << reinterpret_cast<size_t>(idAssigner.getValue(enterRecord.id)) << "\n";
+    // if (!idAssigner.getValue(enterRecord.id)) outs()<<"[error] nullptr\n\n";
+    outs()<<currentCS->getFunction()->getName()<<","<<
+      /*callsite omitted*/","<<
+      cast<const llvm::Function>(idAssigner.getValue(enterRecord.id))->getName()<<"\n";
+    callGraph.addResolvedCallEdge(currentCS,
+      currentCS->getFunction(),
+      cast<const llvm::Function>(idAssigner.getValue(enterRecord.id))
+    );
+  }
 }
 
 /// Pops the current function frame and analyzes aliases before exiting
 void AnalysisImpl::visitExitRecord(const ExitRecord &exitRecord) {
-  if (stackFrames.back().func != exitRecord.id)
+  if (stackFrames.back().func != idAssigner.getValue(exitRecord.id))
     throw std::logic_error("Function entry/exit do not match");
   findAliasPairs();
   stackFrames.pop_back();
@@ -109,21 +130,21 @@ void AnalysisImpl::visitExitRecord(const ExitRecord &exitRecord) {
 
 /// Records a function call (currently unused)
 void AnalysisImpl::visitCallRecord(const CallRecord &callRecord) {
-  // TODO
+  currentCS=cast<const llvm::Instruction>(idAssigner.getValue(callRecord.id));
 }
 } // namespace
 
-DynamicAliasAnalysis::DynamicAliasAnalysis(const char *fileName)
-    : fileName(fileName) {}
+DynamicAliasAnalysis::DynamicAliasAnalysis(llvm::Module &M, const char* fileName)
+    : aliasPairMap(), fileName(fileName), M(M), idAssigner(M), callGraph(M) {}
 
 /// Processes the log file and populates the alias pair map
 void DynamicAliasAnalysis::runAnalysis() {
-  AnalysisImpl(fileName, aliasPairMap).process();
+  AnalysisImpl(fileName, aliasPairMap, idAssigner, callGraph).process();
 }
 
 /// Returns alias pairs for a given function pointer, or nullptr if none found
 const DynamicAliasAnalysis::AliasPairSet *
-DynamicAliasAnalysis::getAliasPairs(DynamicPointer p) const {
+DynamicAliasAnalysis::getAliasPairs(const llvm::Function *p) const {
   auto itr = aliasPairMap.find(p);
   if (itr == aliasPairMap.end())
     return nullptr;

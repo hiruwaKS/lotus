@@ -55,9 +55,12 @@ static void writeData(void* data, size_t size)
 		panic("Log write error\n");
 }
 
+static void hookInit();
+
 /// Writes a log record to the file in binary format
 static void writeLogRecord(struct LogRecord* rec)
 {
+	if (!logFile) hookInit();
 	assert(logFile != NULL && rec != NULL);
 	char type = rec->type;
 	writeData(&type, sizeof(char));
@@ -95,7 +98,7 @@ extern void HookFinalize()
 
 /// Initializes logging: creates log directory and opens the log file.
 /// Uses LOG_DIR environment variable if set, otherwise defaults to "log".
-extern void HookInit()
+static void hookInit()
 {
 	const char* logDirName = "log";
 	const char* logDirEnv = getenv("LOG_DIR");
@@ -106,6 +109,7 @@ extern void HookInit()
 	if (r == -1 && errno != EEXIST)
 		panic("Log directory \'%s\' creation failed.\n", logDirName);
 	openLogFile(logDirName);
+	assert(logFile != NULL);
 	atexit(HookFinalize);
 }
 

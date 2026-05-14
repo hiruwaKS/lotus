@@ -19,6 +19,7 @@ extern llvm::cl::opt<bool> ConfigPrintConstraintGraph;
 extern llvm::cl::opt<bool> ConfigPrintCallGraph;
 extern llvm::cl::opt<bool> ConfigDumpPointsToSet;
 extern llvm::cl::opt<bool> ConfigUseOnTheFlyCallGraph;
+extern llvm::cl::opt<std::string> ConfigFinalCallGraphOutput;
 
 namespace aser {
 
@@ -425,7 +426,11 @@ public:
                        *this->getConsGraph());
     }
     if (ConfigPrintCallGraph) {
-      WriteGraphToFile("CallGraph_Final_" + os.str(), *this->getCallGraph());
+        if (ConfigFinalCallGraphOutput.empty()) {
+            WriteGraphToFile("CallGraph_Final", *this->getCallGraph());
+        } else {
+            WriteGraphToFile(ConfigFinalCallGraphOutput, *this->getCallGraph());
+        }
     }
     if (ConfigDumpPointsToSet) {
       // dump the points to set of every pointers

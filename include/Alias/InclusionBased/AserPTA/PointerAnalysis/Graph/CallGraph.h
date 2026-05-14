@@ -173,7 +173,7 @@ struct DOTGraphTraits<const aser::CallGraph<ctx>>
   }
 
   /// Return function name;
-  static std::string getNodeLabel(const aser::CallGraphNode<ctx> *node,
+  std::string getNodeLabel(const aser::CallGraphNode<ctx> *node,
                                   const aser::CallGraph<ctx> &graph) {
     std::string str;
     raw_string_ostream os(str);
