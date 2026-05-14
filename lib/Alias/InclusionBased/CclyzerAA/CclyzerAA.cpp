@@ -4,12 +4,28 @@
 #include "Alias/InclusionBased/CclyzerAA/CclyzerAA.h"
 
 #include "PointerAnalysis.h"
+#include <boost/throw_exception.hpp>
 
 #include <set>
+#include <exception>
+#include <iostream>
 
 #include <llvm/Analysis/MemoryLocation.h>
 #include <llvm/IR/LegacyPassManager.h>
 #include <llvm/IR/Module.h>
+
+
+namespace boost { // fake implementation (header only), bad solution?
+    void throw_exception(std::exception const & e) {
+        std::cerr << "Boost Exception: " << e.what() << std::endl;
+        std::terminate();
+    }
+    // For newer Boost versions
+    void throw_exception(std::exception const & e, boost::source_location const & loc) {
+        std::cerr << "Boost Exception: " << e.what() << " at " << loc << std::endl;
+        std::terminate();
+    }
+}
 
 namespace lotus {
 namespace cclyzer {
@@ -47,7 +63,7 @@ llvm::AliasResult CclyzerAA::alias(const llvm::MemoryLocation &loc1,
                                    const llvm::MemoryLocation &loc2) {
   if (!_initialized || !_impl->pass)
     return llvm::AliasResult::MayAlias;
-  llvm::AAQueryInfo AAQI;
+  llvm::AAQueryInfo AAQI(nullptr);
   return _impl->pass->getResult().alias(loc1, loc2, AAQI);
 }
 
@@ -56,9 +72,9 @@ bool CclyzerAA::getPointsToSet(const llvm::Value *ptr,
   ptsSet.clear();
   if (!_initialized || !_impl->pass)
     return false;
-  const auto &result = _impl->pass->getResult();
-  const auto &varPts = result.getVariablePointsTo();
-  const auto &allocSites = result.getAllocationSites();
+  auto &result = _impl->pass->getResult();
+  auto &varPts = result.getVariablePointsTo();
+  auto &allocSites = result.getAllocationSites();
   std::set<boost::flyweight<std::string>> aliasSets;
   for (const auto &t : varPts) {
     if (std::get<3>(t) == ptr)

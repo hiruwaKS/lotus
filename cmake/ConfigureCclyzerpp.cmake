@@ -43,5 +43,14 @@ endif()
 # Build cclyzerpp in-tree (defines PAPass, SoufflePA, factgen-exe).
 add_subdirectory(${CCLYZERPP_ROOT} ${CMAKE_BINARY_DIR}/cclyzerpp)
 
+# Expose cclyzerpp include directories so that lotus targets
+# can find headers like PointerAnalysis.h without linking against PAPass.
+get_target_property(_cclyzerpp_interface_inc PAPassInterface INTERFACE_INCLUDE_DIRECTORIES)
+if(_cclyzerpp_interface_inc)
+  include_directories(${_cclyzerpp_interface_inc})
+endif()
+# Also add the FactGenerator include directory explicitly.
+include_directories(SYSTEM ${CCLYZERPP_ROOT}/FactGenerator/include)
+
 # CclyzerAA wrapper will be added from lib/Alias/CMakeLists.txt when this succeeds.
 set(LOTUS_CCLYZERPP_AVAILABLE ON)
