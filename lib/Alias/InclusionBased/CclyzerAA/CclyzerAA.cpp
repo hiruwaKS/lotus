@@ -11,7 +11,7 @@
 #include <iostream>
 
 #include <llvm/Analysis/MemoryLocation.h>
-#include <llvm/IR/LegacyPassManager.h>
+// #include <llvm/IR/LegacyPassManager.h>
 #include <llvm/IR/Module.h>
 
 
@@ -41,9 +41,12 @@ CclyzerAA::~CclyzerAA() = default;
 bool CclyzerAA::run(llvm::Module &M) {
   _initialized = false;
   _impl->pass = std::make_unique<::cclyzer::LegacyPointerAnalysis>();
-  llvm::legacy::PassManager PM;
-  PM.add(_impl->pass.get());
-  PM.run(M);
+  // LegacyPassManager works well in the pass framework, but causes use-after-free 
+  //  if results are accessed outside its.
+  // llvm::legacy::PassManager PM;
+  // PM.add(_impl->pass.get());
+  // PM.run(M);
+  _impl->pass->runOnModule(M);
   _initialized = true;
   return true;
 }
@@ -85,6 +88,22 @@ bool CclyzerAA::getPointsToSet(const llvm::Value *ptr,
       ptsSet.push_back(std::get<1>(t));
   }
   return true;
+}
+
+const CclyzerAA::CallGraphType& CclyzerAA::getCallGraph() const {
+  if (!_initialized || !_impl->pass) {
+    static CclyzerAA::CallGraphType empty;
+    return empty;
+  }
+  return _impl->pass->getResult().getCallGraph();
+}
+
+const std::map<int, boost::flyweight<std::string>>& CclyzerAA::getContextToString() const {
+  if (!_initialized || !_impl->pass) {
+    static std::map<int, boost::flyweight<std::string>> empty;
+    return empty;
+  }
+  return _impl->pass->getResult().getContextToString();
 }
 
 } // namespace cclyzer

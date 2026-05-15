@@ -2,9 +2,9 @@ from private_string import TESTS_PATH, LOTUS_PATH, SVF_PATH, PHASAR_PATH
 
 import os
 from pathlib import Path
+import shutil
 import re
 import sys
-
 python_executable = "python3"
 tmp_dir = os.path.dirname(os.path.abspath(__file__))
 ll_file = os.path.join(tmp_dir, "target.ll")
@@ -14,6 +14,8 @@ dyncg = os.path.join(LOTUS_PATH, "scripts/dynaa/run_dyncg.py")
 wpa_path = os.path.join(SVF_PATH, "Release-build/bin/wpa")
 aser_aa = os.path.join(LOTUS_PATH, "build/bin/aser-aa")
 cclyzer_path = os.path.join(LOTUS_PATH, "build/bin/cclyzer-aa")
+# export LLVM_SYMBOLIZER_PATH=/usr/lib/llvm-14/bin/llvm-symbolizer
+
 phasar_cli_path = os.path.join(PHASAR_PATH, "build/tools/phasar-cli/phasar-cli")
 configs = [
     # ("SVF", "FSPTA (very simple)",         f"-fspta -ff-eq-base -dump-callgraph"),
@@ -25,8 +27,16 @@ configs = [
     # ("SVF", "Andersen (vt, pwc)",        f"-ander -merge-pwc -vt-in-ir -ff-eq-base -svf-main -dump-callgraph"),
     # ("SVF", "Andersen (consts, arrays)", f"-ander -model-consts -model-arrays -merge-pwc -vt-in-ir -ff-eq-base -svf-main -dump-callgraph"),
     # ("AserPTA", "default", None),
-    ("Phasar", "OTF", f"-C otf -P --emit-cg-as-dot"),
-    ("Phasar", "CFA", f"-C cfa -P --emit-cg-as-dot"),
+    # ("Phasar", "CHA CFLAnders", ["--call-graph-analysis", "cha", "--alias-analysis", "cflanders", "--emit-cg-as-dot"]),
+    # ("Phasar", "RTA CFLAnders", ["--call-graph-analysis", "rta", "--alias-analysis", "cflanders", "--emit-cg-as-dot"]),
+    # ("Phasar", "VTA CFLAnders", ["--call-graph-analysis", "vta", "--alias-analysis", "cflanders", "--emit-cg-as-dot"]),
+    # ("Phasar", "OTF CFLAnders", ["--call-graph-analysis", "otf", "--alias-analysis", "cflanders", "--emit-cg-as-dot"]),
+    # ("Phasar", "CHA CFLSteens", ["--call-graph-analysis", "cha", "--alias-analysis", "cflsteens", "--emit-cg-as-dot"]),
+    # ("Phasar", "RTA CFLSteens", ["--call-graph-analysis", "rta", "--alias-analysis", "cflsteens", "--emit-cg-as-dot"]),
+    # ("Phasar", "VTA CFLSteens", ["--call-graph-analysis", "vta", "--alias-analysis", "cflsteens", "--emit-cg-as-dot"]),
+    # ("Phasar", "OTF CFLSteens", ["--call-graph-analysis", "otf", "--alias-analysis", "cflsteens", "--emit-cg-as-dot"]),
+    ("Cclyzer", "unification", ["--print-cg", "--datalog-analysis=unification"]),
+    ("Cclyzer", "subset", ["--print-cg", "--datalog-analysis=subset"]),
 ]
 
 # ANSI color codes
@@ -127,11 +137,81 @@ def parse_SVF(filepath):
                     result[caller_func].add(callee_func)
     return result
 
-def run_command(cmd: str|list[str], capture=True):
-    print(cmd)
+def parse_phasar(filepath):
+    """
+    Parse a Phasar DOT call graph file and return {caller: {callee}} dictionary.
+    Format example:
+      digraph CallGraph{
+      0[label="callThroughNestedPtr"];
+      1[label="add"];
+      ...
+      4->0[label="call void @callThroughNestedPtr(...) | ID: 117"];
+      4->9[label="..."];
+      }
+    """
+    cg = {}
+    node_pattern = re.compile(r'^\s*(\d+)\[label="([^"]+)"\];')
+    edge_pattern = re.compile(r'^\s*(\d+)->(\d+)\[')
+
+    id_to_func = {}
+    with open(filepath, 'r') as f:
+        for line in f:
+            m = node_pattern.match(line)
+            if m:
+                node_id = m.group(1)
+                func_name = m.group(2)
+                id_to_func[node_id] = func_name
+        
+
+    with open(filepath, 'r') as f:
+        for line in f:
+            m = edge_pattern.match(line)
+            if m:
+                caller_id = m.group(1)
+                callee_id = m.group(2)
+                caller = id_to_func.get(caller_id)
+                callee = id_to_func.get(callee_id)
+                if caller and callee:
+                    cg.setdefault(caller, set()).add(callee)
+
+    return cg
+
+def parse_cclyzer(output):
+    """
+    Parse Cclyzer stdout output into {caller: {callee}} dictionary.
+    Format: "caller -> callee" lines after "Call graph (N edges):"
+    """
+    cg = {}
+    in_cg = False
+
+    for line in output.strip().split('\n'):
+        line = line.strip()
+
+        # Detect start of call graph section
+        if line.startswith('Call graph'):
+            in_cg = True
+            continue
+
+        if in_cg:
+            # Parse "caller -> callee" format
+            parts = line.split(' -> ')
+            if len(parts) == 2:
+                caller = parts[0].strip()
+                callee = parts[1].strip()
+                if callee == "main":
+                    continue
+                cg.setdefault(caller, set()).add(callee)
+
+    return cg
+
+def run_command(cmd: str | list[str], capture=True):
+    print(cmd if isinstance(cmd, str) else " ".join(cmd))
     import subprocess
     """Run a shell command; return combined stdout+stderr on success, exit on failure."""
-    result = subprocess.run(cmd, shell=True, capture_output=capture, text=True)
+    if isinstance(cmd, list):
+        result = subprocess.run(cmd, capture_output=capture, text=True)
+    else:
+        result = subprocess.run(cmd, shell=True, capture_output=capture, text=True)
     if result.returncode != 0:
         print(f"{RED}Error: {result.stderr}{RESET}")
         sys.exit(1)
@@ -148,20 +228,34 @@ def compare_callgraphs(dyn_cg, static_cg):
     return missing
 
 def main():
-    if not Path(TESTS_PATH).exists():
-        print(f"Directory {TESTS_PATH} does not exist.")
-        return
+    # If sys.argv provides file(s), use them; otherwise fall back to TESTS_PATH glob
+    if len(sys.argv) > 1:
+        files = []
+        for arg in sys.argv[1:]:
+            p = Path(arg)
+            if p.exists():
+                files.append(p)
+            else:
+                print(f"Warning: {arg} does not exist, skipping.")
+        if not files:
+            print("No valid files provided. Exiting.")
+            return
+    else:
+        if not Path(TESTS_PATH).exists():
+            print(f"Directory {TESTS_PATH} does not exist.")
+            return
+        files = sorted(Path(TESTS_PATH).glob('*.*'))
 
     results = {}
 
-    for cpp_file in sorted(Path(TESTS_PATH).glob('*.*')):
-        file_name = cpp_file.name
+    for i, src_file in enumerate(files):
+        file_name = src_file.name
         print(f"\nAnalyzing: {file_name}")
 
         try:
             # 1. Compile to LLVM IR and bitcode
             args = "-flto -fwhole-program-vtables -emit-llvm -c"
-            compile_cmd=f"{clang} {str(cpp_file)} {args}"
+            compile_cmd=f"{clang} {str(src_file)} {args}"
             print(f"[*] Compiling to LLVM IR: {args}")
             run_command(f"{compile_cmd} -S -o {ll_file}")
             run_command(f"{compile_cmd} -o {bc_file}")
@@ -196,26 +290,37 @@ def main():
                         continue
                     static_cg = parse_aser(dot_file)
                 elif tool == "Phasar":
-                    output_dir = os.path.dirname(os.path.abspath(ll_file))
-                    # Use the full args string directly
-                    cmd = f"{phasar_cli_path} -m {ll_file} {args} -O {output_dir}"
-                    print(f"  Running: {cmd}")
-                    # !!!error:  Error: phasar-cli: for the --alias-analysis option: Cannot find option named '--emit-cg-as-dot'!
+                    output_dir = os.path.join(os.path.dirname(os.path.abspath(ll_file)),f"phasar_{i}")
+                    os.makedirs(output_dir, exist_ok=True)
+                    cmd = [phasar_cli_path, "--module", ll_file] + args + ["--out", output_dir]
                     run_command(cmd)
                     # phasar writes the dot file to the output directory with a timestamp subdirectory
                     import glob
-                    dot_files = glob.glob(os.path.join(output_dir, "*", "*.dot"))
+                    dot_files = glob.glob(os.path.join(output_dir, "*", "*.txt"))
                     if not dot_files:
                         # try also the output_dir itself
-                        dot_files = glob.glob(os.path.join(output_dir, "*.dot"))
+                        dot_files = glob.glob(os.path.join(output_dir, "*.txt"))
                     if not dot_files:
                         print(f"  {RED}[-] phasar dot file not found, skipping.{RESET}")
+                        # Clean up the empty directory
+                        shutil.rmtree(output_dir, ignore_errors=True)
                         continue
                     # use the most recent dot file
                     dot_file = max(dot_files, key=os.path.getmtime)
+                    print(dot_file)
                     print(f"  Found dot file: {dot_file}")
-                    static_cg = parse_aser(dot_file)
-                
+                    static_cg = parse_phasar(dot_file)
+                    # Remove temporary phasar output directory
+                    shutil.rmtree(output_dir, ignore_errors=True)
+                elif tool == "Cclyzer":
+                    # Cclyzer outputs to stdout
+                    output = run_command([cclyzer_path, ll_file] + args)
+                    static_cg = parse_cclyzer(output)
+
+                    if not static_cg:
+                        print(f"  {RED}[-] No call graph found in output, skipping.{RESET}")
+                        continue
+
                 missing = compare_callgraphs(dyn_cg, static_cg)
                 missing_results.append(missing)
 

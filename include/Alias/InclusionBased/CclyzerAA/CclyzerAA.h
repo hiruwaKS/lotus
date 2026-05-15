@@ -5,6 +5,10 @@
 
 #include <memory>
 #include <vector>
+#include <map>
+#include <string>
+#include <tuple>
+#include <boost/flyweight.hpp>
 
 #include <llvm/ADT/ArrayRef.h>
 #include <llvm/Analysis/AliasAnalysis.h>
@@ -21,6 +25,9 @@ namespace cclyzer {
 /// Run analysis on a module, then query alias and points-to.
 class CclyzerAA {
 public:
+  using CallGraphType = std::multimap<
+    const llvm::Value*,
+    std::tuple<int, int, const llvm::Value*>>;
   CclyzerAA();
   ~CclyzerAA();
 
@@ -44,6 +51,11 @@ public:
   /// Whether run() completed successfully and queries are valid.
   bool isInitialized() const { return _initialized; }
 
+  /// Get callgraph.
+  const CallGraphType& getCallGraph() const;
+
+  /// Get the mapping to string.
+  const std::map<int, boost::flyweight<std::string>>& getContextToString() const;
 private:
   struct Impl;
   std::unique_ptr<Impl> _impl;

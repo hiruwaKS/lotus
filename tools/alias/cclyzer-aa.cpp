@@ -23,7 +23,7 @@ static cl::opt<std::string> InputFilename(cl::Positional,
                                           cl::Required);
 
 static cl::opt<bool> PrintCallGraph("print-cg",
-                                    cl::desc("Print call graph statistics"),
+                                    cl::desc("Print call graph"),
                                     cl::init(false));
 
 static cl::opt<bool> Verbose("v", cl::desc("Verbose output"), cl::init(false));
@@ -56,25 +56,18 @@ int main(int argc, char **argv) {
 
   // Print call graph statistics if requested
   if (PrintCallGraph && !OnlyStatistics) {
-    // CclyzerAA doesn't expose a call graph directly.
     // Print basic module-level call information instead.
-    unsigned directCalls = 0, indirectCalls = 0;
-    for (auto &F : *M) {
-      if (F.isDeclaration()) continue;
-      for (auto &BB : F) {
-        for (auto &I : BB) {
-          if (auto *CI = dyn_cast<CallInst>(&I)) {
-            if (CI->getCalledFunction())
-              ++directCalls;
-            else
-              ++indirectCalls;
-          }
-        }
+    const auto& callgraph = CclyzerAA.getCallGraph();
+    const auto& ctx_to_str = CclyzerAA.getContextToString();
+
+    outs() << "Call graph (" << callgraph.size() << " edges):\n";
+    for (const auto& [caller, callee_info] : callgraph) {
+      auto [caller_ctx, callee_ctx, callee] = callee_info;
+      if (auto *callerInst = dyn_cast<Instruction>(caller)) {
+        outs() << callerInst->getParent()->getParent()->getName()
+              << " -> " << callee->getName() << "\n";
       }
     }
-    outs() << "Call graph: " << M->getFunctionList().size() << " functions, "
-           << directCalls << " direct calls, " << indirectCalls
-           << " indirect calls\n";
   }
 
   if (OnlyStatistics || Verbose) {
