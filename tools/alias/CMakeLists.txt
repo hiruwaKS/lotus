@@ -88,6 +88,13 @@ target_link_libraries(cclyzer-aa PRIVATE
   ${LLVM_LINK_COMPONENTS}
 )
 
+# CFL Alias Analysis Tool
+add_executable(cfl-aa cfl-aa.cpp)
+target_link_libraries(cfl-aa PRIVATE
+    CanaryAliasCLIUtils
+    ${LLVM_LINK_COMPONENTS}
+)
+
 # Call Graph Construction Tool
 add_executable(call-graph call-graph.cpp)
 target_link_libraries(call-graph PRIVATE

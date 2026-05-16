@@ -1,4 +1,4 @@
-from private_string import TESTS_PATH, LOTUS_PATH, SVF_PATH, PHASAR_PATH
+from private_string import TESTS_PATH, LOTUS_PATH, SVF_PATH, PHASAR_PATH, TMP_PATH
 
 import os
 from pathlib import Path
@@ -6,15 +6,15 @@ import shutil
 import re
 import sys
 python_executable = "python3"
-tmp_dir = os.path.dirname(os.path.abspath(__file__))
+tmp_dir = TMP_PATH
 ll_file = os.path.join(tmp_dir, "target.ll")
 bc_file = os.path.join(tmp_dir, "target.bc")
 clang = "/usr/bin/clang-14"
-opt = "/usr/bin/opt-14"
 dyncg = os.path.join(LOTUS_PATH, "scripts/dynaa/run_dyncg.py")
 wpa_path = os.path.join(SVF_PATH, "Release-build/bin/wpa")
 aser_aa = os.path.join(LOTUS_PATH, "build/bin/aser-aa")
 cclyzer_path = os.path.join(LOTUS_PATH, "build/bin/cclyzer-aa")
+cfl_aa = os.path.join(LOTUS_PATH, "build/bin/cfl-aa")
 # export LLVM_SYMBOLIZER_PATH=/usr/lib/llvm-14/bin/llvm-symbolizer
 
 phasar_cli_path = os.path.join(PHASAR_PATH, "build/tools/phasar-cli/phasar-cli")
@@ -38,10 +38,8 @@ configs = [
     # ("Phasar", "OTF CFLSteens", ["--call-graph-analysis", "otf", "--alias-analysis", "cflsteens", "--emit-cg-as-dot"]),
     # ("Cclyzer", "unification", ["--print-cg", "--datalog-analysis=unification"]),
     # ("Cclyzer", "subset", ["--print-cg", "--datalog-analysis=subset"]),
-    ("LLVM", "BasicCallGraph (direct only)", ["-print-callgraph", "-analyze", "-enable-new-pm=0"]),
-    ("LLVM", "CallGraph + BasicAA", ["-print-callgraph", "-analyze", "-enable-new-pm=0", "-basic-aa"]),
-    ("LLVM", "CallGraph + CFLAA (Steensgaard-style)", ["-print-callgraph", "-analyze", "-enable-new-pm=0", "-cfl-steens-aa"]),
-    ("LLVM", "CallGraph + CFLAA (Andersen-style)", ["-print-callgraph", "-analyze", "-enable-new-pm=0", "-cfl-anders-aa"]),
+    ("LLVM", "CFLSteens", ["--type=CFLSteens"]),
+    ("LLVM", "CFLAnders", ["--type=CFLAnders"]),
 ]
 
 # ANSI color codes
@@ -209,33 +207,28 @@ def parse_cclyzer(output):
 
     return cg
 
-def parse_llvm(output):
+def parse_cfl_aa(output):
+    """
+    Parse CFL-AA tool stdout output into {caller: {callee}} dictionary.
+    Format: "caller -> callee" lines before "Call graph statistics:" section
+    """
     cg = {}
-    current_caller = None
-
-    # Pattern to match function declaration lines
-    func_pattern = re.compile(r"Call graph node for function: '([^']+)'")
-    # Pattern to match call site lines
-    calls_pattern = re.compile(r"CS<[^>]+>\s+calls\s+'([^']+)'")
 
     for line in output.strip().split('\n'):
         line = line.strip()
 
-        # Check if this line declares a new function node
-        func_match = func_pattern.search(line)
-        if func_match:
-            current_caller = func_match.group(1)
-            if current_caller not in cg:
-                cg[current_caller] = set()
-            continue
+        # Skip empty lines and statistics section
+        if not line or line.startswith('Call graph statistics') or line.startswith('=== Statistics'):
+            break
 
-        # Check if this line contains a call
-        calls_match = calls_pattern.search(line)
-        if calls_match and current_caller:
-            callee = calls_match.group(1)
-            # Skip calls to null function (root node)
-            if callee and callee != 'null':
-                cg[current_caller].add(callee)
+        # Parse "caller -> callee" format
+        parts = line.split(' -> ')
+        if len(parts) == 2:
+            caller = parts[0].strip()
+            callee = parts[1].strip()
+            if callee == "main":
+                continue
+            cg.setdefault(caller, set()).add(callee)
 
     return cg
 
@@ -356,9 +349,9 @@ def main():
                         print(f"  {RED}[-] No call graph found in output, skipping.{RESET}")
                         continue
                 elif tool == "LLVM":
-                    llvm_cmd = [opt, ll_file] + args
+                    llvm_cmd = [cfl_aa, ll_file] + args
                     output = run_command(llvm_cmd)
-                    static_cg = parse_llvm(output)
+                    static_cg = parse_cfl_aa(output)
 
                     if not static_cg:
                         print(f"  {RED}[-] No call graph found in output, skipping.{RESET}")
